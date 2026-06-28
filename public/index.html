@@ -16,7 +16,8 @@
     .btn { background: #e0e0e0; border: none; border-radius: 6px; padding: 8px 14px; font-size: 18px; margin: 2px; cursor: pointer; touch-action: manipulation; }
     .btn:active { background: #ccc; }
     .btn-primary { background: #b34a4a; color: #fff; }
-    .btn-primary:active { background: #922e2e; }
+    .btn-reset { background: #ff9800; color: #fff; }
+    .btn-save { background: #4caf50; color: #fff; }
     .td-actions { white-space: nowrap; }
     .td-actions .btn { margin: 0 2px; }
     .duplicate { background-color: #ffcccc !important; }
@@ -38,12 +39,9 @@
 <body>
   <h1>💒 婚宴座位管理</h1>
   <div class="share-bar">
-    <span style="font-size:16px;">🔗 当前房间号：</span>
-    <span id="roomIdDisplay" style="font-weight:bold;"></span>
-    <br>
+    <span style="font-size:16px;">🔗 房间号：<span id="roomIdDisplay" style="font-weight:bold;"></span></span><br>
     <input type="text" id="shareLink" readonly>
     <button class="btn btn-primary" onclick="copyShareLink()">📋 复制分享链接</button>
-    <p class="tip">点击复制后，直接粘贴给朋友即可。所有人打开后看到的都是最新座位。</p>
   </div>
   <div class="auto-save-indicator" id="saveStatus">自动保存已就绪</div>
 
@@ -73,13 +71,439 @@
     </div>
     <div class="action-bar">
       <button class="btn btn-primary" onclick="refreshSeating()">🔄 重新自动排桌</button>
+      <button class="btn btn-save" onclick="manualSave()">💾 保存到服务器</button>
+      <button class="btn btn-reset" onclick="resetToDefault()">↩️ 恢复初始名单</button>
     </div>
     <p class="tip">👉 手指<strong>长按</strong>人员方块，拖到另一桌松手即可调整。<br>绿色桌 = 7~13人合适，红色桌 = 需调整。</p>
   </div>
 
   <script>
-    // ...（以下内容与之前给出的 public/index.html 完全相同，因长度限制，这里省略，请复制上一轮对话中“public/index.html”的完整JS部分）
-    // 务必确保前端 JS 中 fetch 的路径是 '/api/room'，不是 '/api/room/' 等。
+    // ==================== 默认初始数据（不可变） ====================
+    const DEFAULT_FAMILY = [
+      {name:"刘三爷", count:2}, {name:"朱功仁一家", count:2}, {name:"朱昌权", count:2},
+      {name:"朱昌军", count:3}, {name:"朱功清", count:2}, {name:"朱红兵", count:3},
+      {name:"葛洪亮", count:2}, {name:"葛红艳", count:2}, {name:"朱昌胜", count:3},
+      {name:"朱昌艳", count:4}, {name:"王咸太", count:1}, {name:"朱功胜", count:2},
+      {name:"朱昌伟", count:5}, {name:"朱昌云", count:3}, {name:"朱昌飞", count:3},
+      {name:"朱功银", count:2}, {name:"朱昌宏", count:6}, {name:"朱昌宁", count:6},
+      {name:"朱昌梅", count:4}, {name:"朱爱莲", count:4}, {name:"家宏", count:2},
+      {name:"家荣", count:2}, {name:"梅芳", count:2}, {name:"小林", count:2},
+      {name:"春荣", count:1}, {name:"王新祥", count:3}, {name:"王国伟", count:2},
+      {name:"王阿弟", count:4}, {name:"王二爷", count:2}, {name:"李庭金", count:2},
+      {name:"谢立军", count:4}, {name:"刘古才", count:4}, {name:"朱爱东", count:4},
+      {name:"伴郎伴娘主持节目", count:10}, {name:"朱爱东同学", count:10},
+      {name:"支秀芹同学", count:10}, {name:"朱才华同学同事", count:5},
+      {name:"陈家乐同学同事", count:5}
+    ];
+    const DEFAULT_FRIENDS = [
+      "吴才宏","包德俊","包小华","唐海风","王东","徐红斌","贾建军","王二林","戴正华","李二银",
+      "朱启东","朱启红","朱红","方大文","李胜军","祝长贵","马国庆","孟庆和","孟凡星","吴友成",
+      "李成达","张兵","李二龙","鲁二东","周正明","姚六","李奎友","博小刚","刘曙光","谢老二",
+      "吕爹","吕威","吕二","杨华","许学坤","姚六","井福成","潘二","姜树光","贾三","丁二",
+      "王大通","王大庭","马立兵","徐大龙","小陈","王大龙","陈小碗","陈二碗","路家成","刘广涛",
+      "刘广青","徐寿凯","顾大龙","徐亚东","周大伟","陆大全","陆二全","杨成洪","王丰利","王大宇",
+      "王杰","刘广宏","粱广义","沈海波","沈海洋","二大","阿本","李光金","杨波","周永",
+      "陈夕中","贾小兵","陈大雷","陈六","小范","小路","老黄","安总","赵伟标","赵惠忠",
+      "杨耀","承小二","二胖","黄三","姜大鱼","王旭","陈主高","二猛","老郭","周建中",
+      "王大伟","陆三","贡队长","老余","华东","老黄","小郭","胡老大","小灶王郭总","刘海东",
+      "七鸡","贾大红","朱老大","马海洋","吴大肚","陆德春","小粱","徐中华","徐三","陈乃友",
+      "小郭","弹二林","梁三","田野","范三","范二","陆大吹","杨小文","小仇","郑总","小浦",
+      "万二","丁大","于广东","于二东"
+    ];
+
+    // ==================== 可变数据 ====================
+    let familyData = [];
+    let friendData = [];
+    let blocks = [];      // {id, name, count, type}
+    let tables = [];      // {id, name, blockIds:[]}
+    let roomId = null;
+    let autoSaveTimer = null;
+
+    // ==================== API 通信 ====================
+    async function apiCreateRoom(initialData) {
+      const res = await fetch('/api/room', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(initialData)
+      });
+      if (!res.ok) throw new Error('创建房间失败');
+      return (await res.json()).roomId;
+    }
+
+    async function apiLoadRoom(id) {
+      const res = await fetch('/api/room/' + id);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
+    async function apiSaveRoom(id, data) {
+      const res = await fetch('/api/room/' + id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('保存失败');
+    }
+
+    // 防抖自动保存
+    function scheduleAutoSave() {
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(async () => {
+        if (roomId) {
+          try {
+            await apiSaveRoom(roomId, { familyData, friendData, blocks, tables });
+            document.getElementById('saveStatus').innerText = '✅ 已自动保存';
+            setTimeout(() => document.getElementById('saveStatus').innerText = '自动保存已就绪', 2000);
+          } catch (e) {
+            document.getElementById('saveStatus').innerText = '⚠️ 自动保存失败';
+          }
+        }
+      }, 800);
+    }
+
+    // 手动保存
+    async function manualSave() {
+      if (!roomId) return;
+      try {
+        await apiSaveRoom(roomId, { familyData, friendData, blocks, tables });
+        alert('✅ 名单已保存到服务器！');
+        document.getElementById('saveStatus').innerText = '✅ 已手动保存';
+        setTimeout(() => document.getElementById('saveStatus').innerText = '自动保存已就绪', 2000);
+      } catch (e) {
+        alert('保存失败，请检查网络');
+      }
+    }
+
+    // ==================== 初始化 ====================
+    async function initApp() {
+      const path = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+      if (path && path !== 'index.html') {
+        roomId = path;
+        document.getElementById('roomIdDisplay').innerText = roomId;
+        const serverData = await apiLoadRoom(roomId);
+        if (serverData && serverData.familyData && serverData.familyData.length > 0) {
+          familyData = serverData.familyData;
+          friendData = serverData.friendData || [];
+          blocks = serverData.blocks || [];
+          tables = serverData.tables || [];
+        } else {
+          // 服务器无数据或空白房间，加载默认名单
+          loadDefaultData();
+        }
+      } else {
+        // 无房间，自动创建
+        loadDefaultData();
+        try {
+          roomId = await apiCreateRoom({ familyData, friendData, blocks, tables });
+          window.history.pushState({}, '', '/' + roomId);
+        } catch (e) {
+          alert('无法创建房间，请检查网络');
+        }
+      }
+      document.getElementById('roomIdDisplay').innerText = roomId || '创建中...';
+      document.getElementById('shareLink').value = window.location.href;
+      renderAll();
+      scheduleAutoSave();
+    }
+
+    function loadDefaultData() {
+      familyData = JSON.parse(JSON.stringify(DEFAULT_FAMILY));
+      friendData = [...DEFAULT_FRIENDS];
+      rebuildBlocksAndArrange();
+    }
+
+    // 重置为初始名单
+    async function resetToDefault() {
+      if (!confirm('确定要恢复为初始名单吗？当前所有修改将丢失！')) return;
+      loadDefaultData();
+      renderAll();
+      if (roomId) {
+        try {
+          await apiSaveRoom(roomId, { familyData, friendData, blocks, tables });
+          alert('✅ 已恢复初始名单并保存');
+          document.getElementById('saveStatus').innerText = '✅ 已恢复初始名单';
+          setTimeout(() => document.getElementById('saveStatus').innerText = '自动保存已就绪', 2000);
+        } catch (e) {
+          alert('恢复成功但保存失败，请手动保存');
+        }
+      }
+    }
+
+    // ==================== 数据构建 ====================
+    function buildBlocks() {
+      blocks = [];
+      let nextId = 1;
+      familyData.forEach(f => blocks.push({ id: nextId++, name: f.name, count: f.count, type: 'family' }));
+      friendData.forEach(name => blocks.push({ id: nextId++, name: name, count: 1, type: 'friend' }));
+    }
+
+    function autoArrange() {
+      tables = [];
+      if (blocks.length === 0) return;
+      let remaining = [...blocks];
+      let curTable = { id: 1, name: '桌1', blockIds: [] };
+      let curCnt = 0;
+      const MAX = 13;
+
+      function closeTable() {
+        if (curTable.blockIds.length > 0) {
+          tables.push(curTable);
+          curTable = { id: tables.length + 1, name: '桌' + (tables.length + 1), blockIds: [] };
+          curCnt = 0;
+        }
+      }
+
+      for (let block of remaining) {
+        if (block.count > MAX) {
+          let left = block.count, subIdx = 1;
+          while (left > 0) {
+            let take = Math.min(left, MAX);
+            let subId = block.id * 1000 + subIdx;
+            blocks.push({ id: subId, name: block.name, count: take, type: block.type, isSplit: true, parentId: block.id });
+            let subBlock = blocks[blocks.length - 1];
+            if (curCnt + subBlock.count > MAX) closeTable();
+            curTable.blockIds.push(subBlock.id);
+            curCnt += subBlock.count;
+            left -= take;
+            subIdx++;
+          }
+          continue;
+        }
+        if (curCnt + block.count > MAX) closeTable();
+        curTable.blockIds.push(block.id);
+        curCnt += block.count;
+      }
+      if (curTable.blockIds.length > 0) tables.push(curTable);
+    }
+
+    function rebuildBlocksAndArrange() {
+      buildBlocks();
+      autoArrange();
+      renderSeating();
+      scheduleAutoSave();
+    }
+
+    // ==================== 渲染 ====================
+    function renderAll() {
+      renderFamilyTable();
+      renderFriendTable();
+      renderSeating();
+    }
+
+    function renderFamilyTable() {
+      const tbody = document.querySelector("#familyTable tbody");
+      tbody.innerHTML = "";
+      familyData.forEach((item, idx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td contenteditable="true" onblur="updateFamilyName(${idx}, this.innerText)" style="font-size:18px;">${item.name}</td>
+          <td><input type="number" value="${item.count}" min="1" style="width:60px;font-size:18px;" onchange="updateFamilyCount(${idx}, this.value)"></td>
+          <td class="td-actions">
+            <button class="btn" onclick="saveFamilyRow(${idx})">保存</button>
+            <button class="btn" onclick="deleteFamilyRow(${idx})">删除</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderFriendTable() {
+      const tbody = document.querySelector("#friendTable tbody");
+      tbody.innerHTML = "";
+      friendData.forEach((name, idx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td contenteditable="true" onblur="updateFriendName(${idx}, this.innerText)" style="font-size:18px;" class="friend-name-cell">${name}</td>
+          <td>1</td>
+          <td class="td-actions">
+            <button class="btn" onclick="saveFriendRow(${idx})">保存</button>
+            <button class="btn" onclick="deleteFriendRow(${idx})">删除</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+      highlightDuplicates();
+    }
+
+    function highlightDuplicates() {
+      const cells = document.querySelectorAll("#friendTable .friend-name-cell");
+      cells.forEach(c => c.classList.remove("duplicate"));
+      const countMap = {};
+      friendData.forEach(n => { const t = n.trim(); countMap[t] = (countMap[t]||0)+1; });
+      cells.forEach(cell => {
+        if (countMap[cell.innerText.trim()] > 1) cell.classList.add("duplicate");
+      });
+    }
+
+    // 名单修改函数（挂到 window 供 onclick 使用）
+    window.updateFamilyName = (idx, name) => { familyData[idx].name = name; };
+    window.updateFamilyCount = (idx, val) => {
+      let n = parseInt(val);
+      if (isNaN(n) || n<1) { alert("人数必须≥1"); return; }
+      familyData[idx].count = n;
+    };
+    window.saveFamilyRow = (idx) => { renderFamilyTable(); rebuildBlocksAndArrange(); };
+    window.deleteFamilyRow = (idx) => {
+      if (confirm(`确定删除 "${familyData[idx].name}" 吗？`)) {
+        familyData.splice(idx,1);
+        renderFamilyTable();
+        rebuildBlocksAndArrange();
+      }
+    };
+    window.addFamilyRow = () => { familyData.push({name:"新家庭", count:1}); renderFamilyTable(); rebuildBlocksAndArrange(); };
+
+    window.updateFriendName = (idx, name) => { friendData[idx] = name; };
+    window.saveFriendRow = (idx) => { renderFriendTable(); rebuildBlocksAndArrange(); };
+    window.deleteFriendRow = (idx) => {
+      if (confirm(`确定删除 "${friendData[idx]}" 吗？`)) {
+        friendData.splice(idx,1);
+        renderFriendTable();
+        rebuildBlocksAndArrange();
+      }
+    };
+    window.addFriendRow = () => { friendData.push("新朋友"); renderFriendTable(); rebuildBlocksAndArrange(); };
+
+    // ==================== 座位渲染与拖拽 ====================
+    function renderSeating() {
+      const container = document.getElementById("tablesContainer");
+      container.innerHTML = "";
+      tables.forEach(table => {
+        const total = table.blockIds.reduce((acc, bid) => {
+          let b = blocks.find(x => x.id === bid);
+          return acc + (b ? b.count : 0);
+        }, 0);
+        const ok = total >= 7 && total <= 13;
+        const card = document.createElement("div");
+        card.className = `table-card ${ok ? 'ok' : 'warn'}`;
+        card.setAttribute("data-table-id", table.id);
+        card.addEventListener("touchstart", e => {}, {passive: true});
+        card.addEventListener("touchmove", e => e.preventDefault(), {passive: false});
+        card.addEventListener("touchend", handleTableDrop);
+        const title = document.createElement("h3");
+        title.innerHTML = `${table.name} <span class="count">${total}人</span>`;
+        card.appendChild(title);
+        const chipArea = document.createElement("div");
+        table.blockIds.forEach(bid => {
+          const block = blocks.find(b => b.id === bid);
+          if (block) {
+            const chip = createPersonChip(block);
+            chipArea.appendChild(chip);
+          }
+        });
+        card.appendChild(chipArea);
+        container.appendChild(card);
+      });
+
+      const assigned = new Set(tables.flatMap(t => t.blockIds));
+      const unassigned = blocks.filter(b => !assigned.has(b.id));
+      if (unassigned.length > 0) {
+        const card = document.createElement("div");
+        card.className = "table-card";
+        card.id = "unassignedCard";
+        card.setAttribute("data-table-id", "unassigned");
+        card.addEventListener("touchend", handleTableDrop);
+        const title = document.createElement("h3");
+        title.textContent = "未分配";
+        card.appendChild(title);
+        const chipArea = document.createElement("div");
+        unassigned.forEach(b => chipArea.appendChild(createPersonChip(b)));
+        card.appendChild(chipArea);
+        container.appendChild(card);
+      }
+      scheduleAutoSave();
+    }
+
+    function createPersonChip(block) {
+      const chip = document.createElement("span");
+      chip.className = "person-block";
+      chip.textContent = block.type === 'family' ? `${block.name}(${block.count}人)` : block.name;
+      chip.setAttribute("data-block-id", block.id);
+      chip.addEventListener("touchstart", handleTouchStart, {passive: false});
+      chip.addEventListener("touchmove", handleTouchMove, {passive: false});
+      chip.addEventListener("touchend", handleTouchEnd);
+      return chip;
+    }
+
+    let draggingBlockId = null, dragClone = null, startX, startY, touchMoved = false;
+
+    function handleTouchStart(e) {
+      if (e.touches.length !== 1) return;
+      draggingBlockId = parseInt(e.currentTarget.getAttribute("data-block-id"));
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      touchMoved = false;
+      e.preventDefault();
+    }
+
+    function handleTouchMove(e) {
+      if (!draggingBlockId) return;
+      const touch = e.touches[0];
+      if (!touchMoved && Math.abs(touch.clientX - startX) < 8 && Math.abs(touch.clientY - startY) < 8) return;
+      touchMoved = true;
+      if (!dragClone) {
+        const orig = document.querySelector(`[data-block-id="${draggingBlockId}"]`);
+        if (orig) orig.style.opacity = "0.4";
+        dragClone = orig.cloneNode(true);
+        dragClone.classList.add("dragging-clone");
+        document.body.appendChild(dragClone);
+        dragClone.style.width = orig.offsetWidth + "px";
+      }
+      dragClone.style.left = (touch.clientX - dragClone.offsetWidth/2) + "px";
+      dragClone.style.top = (touch.clientY - dragClone.offsetHeight/2) + "px";
+      e.preventDefault();
+    }
+
+    function handleTouchEnd(e) {
+      if (!draggingBlockId) return;
+      const orig = document.querySelector(`[data-block-id="${draggingBlockId}"]`);
+      if (orig) orig.style.opacity = "1";
+      if (dragClone && touchMoved) {
+        const touch = e.changedTouches[0];
+        dragClone.style.display = "none";
+        const targetCard = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.table-card');
+        dragClone.remove();
+        dragClone = null;
+        if (targetCard && targetCard.getAttribute("data-table-id")) {
+          const targetId = targetCard.getAttribute("data-table-id");
+          tables.forEach(t => t.blockIds = t.blockIds.filter(id => id !== draggingBlockId));
+          if (targetId !== "unassigned") {
+            const tid = parseInt(targetId);
+            const t = tables.find(x => x.id === tid);
+            if (t) t.blockIds.push(draggingBlockId);
+          }
+          renderSeating();
+          scheduleAutoSave();
+        }
+      }
+      draggingBlockId = null;
+      touchMoved = false;
+    }
+
+    function handleTableDrop(e) {}
+
+    window.refreshSeating = () => {
+      autoArrange();
+      renderSeating();
+      scheduleAutoSave();
+    };
+
+    // ==================== 分享 ====================
+    window.copyShareLink = () => {
+      const input = document.getElementById('shareLink');
+      input.select();
+      input.setSelectionRange(0, 99999);
+      try {
+        document.execCommand('copy');
+        alert('✅ 链接已复制，可直接粘贴发给朋友！');
+      } catch (e) {
+        prompt('请手动复制以下链接：', input.value);
+      }
+    };
+
+    // 暴露给 HTML 按钮
+    window.manualSave = manualSave;
+    window.resetToDefault = resetToDefault;
+
+    // ==================== 启动 ====================
+    initApp();
   </script>
 </body>
 </html>
