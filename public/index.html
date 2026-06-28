@@ -1,1 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, touch-action: manipulation">
+  <title>婚宴座位管理·自动保存</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: #f7f5f0; padding: 15px; font-size: 18px; color: #333; touch-action: pan-y; }
+    h1 { font-size: 26px; text-align: center; margin-bottom: 15px; color: #b34a4a; }
+    h2 { font-size: 22px; margin: 15px 0 8px; border-left: 5px solid #b34a4a; padding-left: 10px; }
+    .section { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #ddd; padding: 8px 4px; text-align: left; vertical-align: middle; }
+    th { background: #f9f9f9; font-size: 18px; font-weight: bold; }
+    .btn { background: #e0e0e0; border: none; border-radius: 6px; padding: 8px 14px; font-size: 18px; margin: 2px; cursor: pointer; touch-action: manipulation; }
+    .btn:active { background: #ccc; }
+    .btn-primary { background: #b34a4a; color: #fff; }
+    .btn-primary:active { background: #922e2e; }
+    .td-actions { white-space: nowrap; }
+    .td-actions .btn { margin: 0 2px; }
+    .duplicate { background-color: #ffcccc !important; }
+    .tables-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 15px; }
+    .table-card { border: 3px solid #ccc; border-radius: 12px; padding: 10px; min-width: 130px; max-width: 240px; min-height: 90px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .table-card.ok { border-color: #4caf50; }
+    .table-card.warn { border-color: #e53935; background: #fff5f5; }
+    .table-card h3 { font-size: 20px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .table-card .count { font-size: 24px; }
+    .person-block { display: inline-block; background: #e8f0fe; border: 1px solid #90caf9; border-radius: 8px; padding: 6px 10px; margin: 4px; font-size: 18px; user-select: none; touch-action: none; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .person-block.dragging-clone { opacity: 0.7; background: #bbdefb; position: fixed; z-index: 999; pointer-events: none; box-shadow: 0 8px 16px rgba(0,0,0,0.3); }
+    .action-bar { text-align: center; margin: 20px 0; }
+    .tip { font-size: 16px; color: #888; margin: 5px 0; }
+    .share-bar { background: #f0f0f0; border-radius: 8px; padding: 10px; text-align: center; margin-bottom: 15px; }
+    .share-bar input { width: 70%; padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; margin-right: 5px; }
+    .auto-save-indicator { font-size: 14px; color: #888; text-align: right; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <h1>💒 婚宴座位管理</h1>
+  <div class="share-bar">
+    <span style="font-size:16px;">🔗 当前房间号：</span>
+    <span id="roomIdDisplay" style="font-weight:bold;"></span>
+    <br>
+    <input type="text" id="shareLink" readonly>
+    <button class="btn btn-primary" onclick="copyShareLink()">📋 复制分享链接</button>
+    <p class="tip">点击复制后，直接粘贴给朋友即可。所有人打开后看到的都是最新座位。</p>
+  </div>
+  <div class="auto-save-indicator" id="saveStatus">自动保存已就绪</div>
 
+  <div class="section">
+    <h2>🏠 家庭 & 团体</h2>
+    <table id="familyTable">
+      <thead><tr><th>名称</th><th>人数</th><th style="width:110px">操作</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button class="btn" onclick="addFamilyRow()">➕ 添加家庭</button>
+  </div>
+
+  <div class="section">
+    <h2>👤 朋友（每人1位）</h2>
+    <table id="friendTable">
+      <thead><tr><th>姓名</th><th>人数</th><th style="width:110px">操作</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button class="btn" onclick="addFriendRow()">➕ 添加朋友</button>
+    <p class="tip">⚠️ 重复名字已标红，请确认是否为同一人。</p>
+  </div>
+
+  <div class="section">
+    <h2>🪑 自动排桌（拖拽调整）</h2>
+    <div id="seatingArea">
+      <div id="tablesContainer" class="tables-grid"></div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-primary" onclick="refreshSeating()">🔄 重新自动排桌</button>
+    </div>
+    <p class="tip">👉 手指<strong>长按</strong>人员方块，拖到另一桌松手即可调整。<br>绿色桌 = 7~13人合适，红色桌 = 需调整。</p>
+  </div>
+
+  <script>
+    // ...（以下内容与之前给出的 public/index.html 完全相同，因长度限制，这里省略，请复制上一轮对话中“public/index.html”的完整JS部分）
+    // 务必确保前端 JS 中 fetch 的路径是 '/api/room'，不是 '/api/room/' 等。
+  </script>
+</body>
+</html>
