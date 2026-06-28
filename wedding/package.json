@@ -1,7 +1,7 @@
 {
   "name": "wedding-seating",
   "version": "1.0.0",
-  "description": "婚宴座位管理服务器",
+  "description": "婚宴座位管理",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
